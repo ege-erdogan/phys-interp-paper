@@ -65,18 +65,89 @@
   % Abstract goes here.
 \end{abstract}
 
-\section{Introduction}
-\label{sec:introduction}
-% Citation checks: one entry from each bibliography file.
-\citep{paszke2019pytorch}
+\section{Introduction} \label{sec:introduction}
 
-\section{Background and Related Work} \label{sec:related_work}
+\section{Background} \label{sec:background}
 
 \section{Probing}
 
-\subsection{Setup}
+We want to evaluate what information is linearly decodable from the residual stream of Aurora's backbone. We use linear probes: ridge regression \citep{hoerl1970ridge} to predict ERA5 fields and other quantities derived from the fields. Fundamental questions:
+\begin{itemize}
+  \item What information is or is not linearly decodable from Aurora's residual stream?
+  \item How are different quantities geometrically related? Why?
+\end{itemize}
+Depending on the results these may support a \textit{distributed linear representation hypothesis} for Aurora, where physical quantities can be read linearly from the residual stream but not from individual neurons (hence \textit{distributed}).
 
-Want to evaluate what is decodable from Aurora 1.5 \citep{weynAURORA15FINETUNING, bodnarFoundationModelEarth2025} activations.s
+\subsection{Training Setup}
+
+We use bold symbols for vectors and fields (including activation tensors), and non-bold symbols for scalars.
+
+\textbf{Targets.} We use the ERA5 ($1440 \times 721$ longitude--latitude grid, i.e. $0.25^\circ$) \citep{hersbach2020era5} fields as the probe targets. The evaluation grid is $720 \times 1440$ in latitude--longitude order. Surface fields: 2m temperature, 10m zonal and meridional wind, mean sea-level pressure, total column water vapor, and total cloud cover. Atmospheric fields (each at 250, 500, 700, 850 hPa): temperature, zonal and meridional wind, geopotential, and specific humidity. In addition to these fields directly provided in ERA5, we compute these atmospheric fields based on the ERA5 fields: wind speed, relative vorticity, and relative humidity.
+
+\textbf{Inputs.} Inputs are the residual stream activations from the six stage outputs from the Aurora backbone. The full latent tensor at the end of a stage is of size $H \times W \times 4 \times D$ with a $H \times W$ spatial grid at four latent levels and $D$ channels per token. The latent levels do not have direct physical counterparts, but we can trace each latent token back to an ERA5 patch, although the latent tokens naturally contain information from surrounding patches as well as a result of attention and merge/split operations of the UNet transformer. Table \ref{tab:backbone_stages} shows the size of the spatial grid at each stage and the corresponding ERA5 patch size.
+
+\begin{table}[t!]
+  \caption{Spatial resolution and channel counts of Aurora's encoder (E) and decoder (D) stages. Grid dimensions are latitude $\times$ longitude; positions per token describe the probe output layout.}
+  \label{tab:backbone_stages}
+  \centering
+  \small
+  \setlength{\tabcolsep}{0pt}
+  \begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lcrc@{}}
+    \toprule
+    \textbf{Stage} & \textbf{Spatial grid} & \textbf{Channels} & \textbf{ERA5 patch size} \\
+    \midrule
+    E0 & $180 \times 360$ & 512 & $4 \times 4$ \\
+    E1 & $90 \times 180$ & 1,024 & $8 \times 8$ \\
+    E2 & $45 \times 90$ & 2,048 & $16 \times 16$ \\
+    \midrule[0.3pt]
+    D0 & $45 \times 90$ & 2,048 & $16 \times 16$ \\
+    D1 & $90 \times 180$ & 1,024 & $8 \times 8$ \\
+    D2 & $180 \times 360$ & 512 & $4 \times 4$ \\
+    \bottomrule
+  \end{tabular*}
+\end{table}
+
+To evaluate how distributed the representations are, we vary $k \in \{1,4,16,32,64,128,256,D\}$: the input dimension of a probe. For each target and Aurora stage, we only select the $k$ neurons with the largest squared Pearson correlation coefficient with the target.
+
+We sample initializations at 00:00 UTC every three days starting on January 1 each year, resulting in 122 initializations per year. We use one year (2017) to select the top-$k$ neurons, three years (2018-2020) for training, and one year (2021) for evaluation.
+
+\textbf{Probes.} Each latent token corresponds to multiple ERA5 cells rather than a single scalar, so we fit separate probes for each ERA5 cell a token corresponds to. These probes are shared between the latent tokens at the same latent level and stage. So e.g. for one target field with the E2 stage as the inputs, we fit $16 \times 16 \times 4 = 1,024$ probes.
+
+We fit probes separately for each target quantity $q$, pressure level $p$ (for atmospheric targets), backbone stage $s$, latent level $l$, lead time $\tau \in \{0,6,12,18,24\}$ hours, and channel count $k$. We denote this combination by $c=(q,p,s,l,\tau,k)$.
+
+Let $n$ index a date--token pair and $j$ a position within its ERA5 patch. The target field $\mathbf{Y}_c$ is arranged so that $\mathbf{Y}_c(n,j)$ is the target at that position and time $t_n+\tau$. The probe predicts
+\begin{equation}
+  \widehat{\mathbf{Y}}_c(n,j)
+  = \mathbf{w}_{c,j}^{\top}\mathbf{h}_{c,j}(n)+\beta_{c,j}.
+\end{equation}
+Here $\mathbf{h}_{c,j}(n)\in\mathbb{R}^k$ contains the $k$ selected, standardized channels from $\mathbf{h}_l$ at stage $s$, with all lead times using activations from the same initial forward pass. The weights and intercept are shared across dates and spatial tokens.
+
+For each $c$ and $j$, we fit ridge regression:
+\begin{equation} \label{eq:ridge}
+  \begin{aligned}
+    \min_{\mathbf{w}_{c,j},\beta_{c,j}}\;&
+    \sum_{n\in\mathcal{T}}
+    \bigl(\mathbf{Y}_c(n,j)-\widehat{\mathbf{Y}}_c(n,j)\bigr)^2 \\
+    &+\alpha\lVert\mathbf{w}_{c,j}\rVert_2^2.
+  \end{aligned}
+\end{equation}
+Here $\mathcal{T}$ contains the training date--token pairs. We select $\alpha$ separately for each readout by generalized cross-validation on the training data; the intercept is unpenalized.
+
+\textbf{Evaluation}. We follow the setup in \citep{lehmannFinetuningWeatherFoundation2025} and evaluate the probes using three metrics at each evaluation date: mean absolute error (MAE), root mean squared error (RMSE), and spatial Pearson correlation. For a fixed condition $c$ and evaluation date $t$, all sums below run over date--token pairs $n$ with $t_n=t$ and all within-patch positions $j$:
+\begin{align}
+  \mathrm{MAE}_{c,t}
+  &=\frac{\sum_{n,j}|\mathbf{Y}_c(n,j)-\widehat{\mathbf{Y}}_c(n,j)|}
+  {720\times1440} \\
+  \mathrm{RMSE}_{c,t}
+  &=\sqrt{\frac{\sum_{n,j}\bigl(\mathbf{Y}_c(n,j)-\widehat{\mathbf{Y}}_c(n,j)\bigr)^2}
+  {720\times1440}} \\
+  \rho_{c,t}
+  &=\frac{\sum_{n,j}\delta\mathbf{Y}_c(n,j)\,
+  \delta\widehat{\mathbf{Y}}_c(n,j)}
+  {\sqrt{\sum_{n,j}\delta\mathbf{Y}_c(n,j)^2}
+  \sqrt{\sum_{n,j}\delta\widehat{\mathbf{Y}}_c(n,j)^2}}
+\end{align}
+where $\delta\mathbf{Y}_c(n,j)$ and $\delta\widehat{\mathbf{Y}}_c(n,j)$ denote deviations from each field's spatial mean at date $t$.
 
 \section{Discussion}
 
