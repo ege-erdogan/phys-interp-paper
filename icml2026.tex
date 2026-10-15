@@ -1,0 +1,96 @@
+% Build with latexmk -pdf icml2026.tex (includes BibTeX automatically).
+\documentclass{article}
+
+% Figures and typesetting: also recommended by the official ICML template.
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{hyperref}
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+
+% Anonymous submission. Use [preprint] for a public draft or [accepted]
+% for the camera-ready version. Keep the official style files unchanged.
+\usepackage{icml2026}
+
+% Useful packages from equivariant-sae-paper.
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{amsthm}
+\usepackage{nicefrac}
+\usepackage{multirow}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage[capitalize,noabbrev]{cleveref}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+
+% Same optional author-comment workflow as equivariant-sae-paper.
+\newif\ifshowComments
+\showCommentsfalse % Change to \showCommentstrue while drafting.
+\ifshowComments
+\newcommand{\ee}[1]{{\color{blue}#1}}
+\newcommand{\al}[1]{{\color{red}#1}}
+\else
+\newcommand{\ee}[1]{}
+\newcommand{\al}[1]{}
+\fi
+
+\icmltitlerunning{Latent Physics in AI Weather Models}
+
+\begin{document}
+
+\twocolumn[
+  \icmltitle{Latent Physics in AI Weather Models}
+  % Replace these placeholders before using preprint or accepted mode.
+  \begin{icmlauthorlist}
+    \icmlauthor{Author Name}{institution}
+  \end{icmlauthorlist}
+  \icmlaffiliation{institution}{Department, University, City, Country}
+  \icmlcorrespondingauthor{Author Name}{author@example.com}
+  \vskip 0.3in
+]
+
+\printAffiliationsAndNotice{}
+
+\begin{abstract}
+  % Abstract goes here.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:introduction}
+% Citation checks: one entry from each bibliography file.
+\citep{paszke2019pytorch}
+
+\section{Background and Related Work} \label{sec:related_work}
+
+\section{Probing}
+
+\subsection{Setup}
+
+Want to evaluate what is decodable from Aurora 1.5 \citep{weynAURORA15FINETUNING, bodnarFoundationModelEarth2025} activations.s
+
+\section{Discussion}
+
+\section{Conclusion}
+
+\section*{Impact Statement}
+
+\bibliography{bibliography,manual_bibliography}
+\bibliographystyle{icml2026}
+
+\newpage
+\appendix
+\onecolumn
+\section{Additional Details}
+\label{app:details}
+
+\end{document}
