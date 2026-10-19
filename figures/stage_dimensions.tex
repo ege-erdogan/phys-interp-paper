@@ -1,0 +1,49 @@
+% Spatial extents use relative scales 1, 1/2, 1/4; latent height stays fixed.
+\begin{tikzpicture}[x=1cm,y=1cm,font=\footnotesize]
+\definecolor{stageBlue}{HTML}{356A91}
+\definecolor{stageOrange}{HTML}{C87536}
+\path[use as bounding box] (0,0) rectangle (6.6,7.9);
+\node[fill=black,text=white,minimum size=.38cm,inner sep=0pt,font=\small\bfseries] at (.34,7.55) {B};
+\node[anchor=west,font=\small\bfseries,inner sep=0pt] at (.65,7.55) {Stage outputs and ERA5 patches};
+\draw[black,line width=.8pt] (.15,7.24) -- (6.449999999999999,7.24);
+\foreach \stage/\ratio/\patch/\row in {
+ E0/1/4/0,E1/.5/8/1,E2/.25/16/2,
+ D0/.25/16/3,D1/.5/8/4,D2/1/4/5} {
+  \pgfmathsetmacro{\yy}{6.35-1.10*\row}
+  \pgfmathsetmacro{\ww}{2.08*\ratio}
+  \pgfmathsetmacro{\dx}{.64*\ratio}
+  \pgfmathsetmacro{\dy}{.48*\ratio}
+  \pgfmathtruncatemacro{\cols}{16*\ratio}
+  \pgfmathtruncatemacro{\depth}{4*\ratio}
+  \pgfmathsetmacro{\leftedge}{2.05-(\ww+\dx)/2}
+  \pgfmathsetmacro{\base}{\yy-(.56+\dy)/2}
+  \node[font=\bfseries,anchor=west] at (.05,\yy) {\stage};
+  \begin{scope}[shift={(\leftedge,\base)}]
+    \filldraw[draw=stageBlue!40,fill=stageBlue!4,line width=.45pt]
+      (0,.56) -- (\dx,{.56+\dy}) -- ({\ww+\dx},{.56+\dy}) -- (\ww,.56) -- cycle;
+    \filldraw[draw=stageBlue!40,fill=stageBlue!9,line width=.45pt]
+      (\ww,0) -- ({\ww+\dx},\dy) -- ({\ww+\dx},{.56+\dy}) -- (\ww,.56) -- cycle;
+    \foreach \i in {1,...,\cols} {
+      \draw[stageBlue!22,line width=.25pt] ({.13*\i},.56) -- ({.13*\i+\dx},{.56+\dy});
+    }
+    \foreach \i in {1,...,\depth} {
+      \draw[stageBlue!25,line width=.25pt] ({.16*\i},{.56+.12*\i}) -- ({\ww+.16*\i},{.56+.12*\i});
+      \draw[stageBlue!25,line width=.25pt] ({\ww+.16*\i},{.12*\i}) -- ({\ww+.16*\i},{.56+.12*\i});
+    }
+    \foreach \i in {1,2,3} {
+      \draw[stageBlue!25,line width=.25pt] (\ww,{.14*\i}) -- ({\ww+\dx},{.14*\i+\dy});
+    }
+    \filldraw[draw=stageBlue!40,fill=stageBlue!2,line width=.45pt] (0,0) rectangle (\ww,.56);
+    \foreach \i in {1,2,3} {\draw[stageBlue!22,line width=.25pt] (0,{.14*\i}) -- (\ww,{.14*\i});}
+    \foreach \i in {1,...,\cols} {\draw[stageBlue!22,line width=.25pt] ({.13*\i},0) -- ({.13*\i},.56);}
+    \pgfmathsetmacro{\xx}{\ww/2-.13}
+    \filldraw[fill=stageOrange!25,draw=stageOrange,line width=.4pt]
+      (\xx,.42) -- ({\xx+.16},.54) -- ({\xx+.29},.54) -- ({\xx+.13},.42) -- cycle;
+    \filldraw[fill=stageOrange!65,draw=stageOrange,line width=.4pt]
+      ({\xx+.13},.28) -- ({\xx+.29},.40) -- ({\xx+.29},.54) -- ({\xx+.13},.42) -- cycle;
+    \filldraw[fill=stageOrange!45,draw=stageOrange,line width=.4pt] (\xx,.28) rectangle ({\xx+.13},.42);
+  \end{scope}
+  \draw[-{Latex[length=1.4mm]},black!50,line width=.5pt] (3.6,\yy) -- (4.4,\yy);
+  \node[inner sep=0] at (5.15,\yy) {\includegraphics[height=.94cm]{figures/era5_patch_\patch.png}};
+}
+\end{tikzpicture}

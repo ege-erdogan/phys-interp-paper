@@ -6,7 +6,23 @@
 \usepackage{graphicx}
 \usepackage{subcaption}
 \usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+\input{figures/tikz_fonts.tex}
 \usepackage[dvipsnames]{xcolor}
+\usepackage{tcolorbox}
+\usepackage{enumitem}
+\definecolor{notegreen}{HTML}{56816B}
+\definecolor{notebackground}{HTML}{F3F8F4}
+\newtcolorbox{greenbox}[1]{%
+  colback=notebackground, colframe=notegreen,
+  colbacktitle=notegreen, coltitle=white,
+  fonttitle=\fontfamily{FiraSans-TLF}\bfseries\selectfont,
+  title={#1}, toptitle=5pt, bottomtitle=5pt,
+  boxrule=0pt, sharp corners,
+  boxsep=0pt, left=6pt, right=6pt, top=5pt, bottom=5pt,
+  before skip=10pt, after skip=10pt
+}
 \usepackage{hyperref}
 \newcommand{\theHalgorithm}{\arabic{algorithm}}
 
@@ -24,6 +40,9 @@
 \usepackage{algorithm}
 \usepackage{algorithmic}
 \usepackage[capitalize,noabbrev]{cleveref}
+
+% Reader-facing bibliography notes, on the next line without extra spacing.
+\newcommand{\bibnote}[1]{\unskip\newline\textbf{\textbullet\ #1}}
 
 \theoremstyle{plain}
 \newtheorem{theorem}{Theorem}[section]
@@ -69,7 +88,27 @@
 
 \section{Background} \label{sec:background}
 
+\subsection{Problem Setup of Weather Modeling}
+
+\subsection{Aurora}
+
+\section{Related Work}
+
+\subsection{Weather Interp}
+
+Comprehensive list of activation-based interp of weather models.
+
 \section{Probing}
+
+\begin{figure*}[t!]
+  \centering
+  \resizebox{\textwidth}{!}{%
+    \input{figures/probing_setup.tex}\hspace{5mm}%
+    \input{figures/stage_dimensions.tex}%
+  }
+  \caption{Probing Aurora's backbone representations. \textbf{(A)} ERA5 surface and atmospheric inputs at $t-6$ h and $t$, together with static fields, produce the stage activations. Atmospheric inputs include all 13 pressure levels. For each within-patch position $j$, we select $k$ channels from one token and fit a linear readout, sharing its weights across spatial tokens. Repeating this readout over the grid reconstructs the target field for evaluation against ERA5. The close-up shows a schematic $4\times4$ patch; larger patches use the same procedure. Actual ERA5 maps of 2 m temperature, 10 m zonal wind, and 850 hPa specific humidity from 6 August 2020 at 12:00 and 18:00 UTC illustrate the stacked inputs; the target example uses $\tau=0$. \textbf{(B)} Relative spatial dimensions are shown at each stage, with a constant four-level height, and the corresponding ERA5 footprint on the same geographic crop. Tensor grids are schematic; patch outlines follow the actual $0.25^\circ$ grid.}
+  \label{fig:probing-setup}
+\end{figure*}
 
 We want to evaluate what information is linearly decodable from the residual stream of Aurora's backbone. We use linear probes: ridge regression \citep{hoerl1970ridge} to predict ERA5 fields and other quantities derived from the fields. Fundamental questions:
 \begin{itemize}
@@ -77,6 +116,15 @@ We want to evaluate what information is linearly decodable from the residual str
   \item How are different quantities geometrically related? Why?
 \end{itemize}
 Depending on the results these may support a \textit{distributed linear representation hypothesis} for Aurora, where physical quantities can be read linearly from the residual stream but not from individual neurons (hence \textit{distributed}).
+
+\begin{greenbox}{Probing Takeaways}
+  \begin{itemize}[leftmargin=*, labelindent=0pt]
+    \item Aurora's latent levels roughly correspond in order to atmospheric pressure levels.
+    \item The results support \textit{distributed linear representations}: much physical information can be read linearly from the residual stream, but not from individual or only a few neurons.
+    \item Despite distributed representations, full-width probes concentrate importance on few neurons on average.
+    \item Input fields can more easily be decoded from earlier layers and output (+6h) fields from the later layers. Middle layers are best for further ($>$ 6h) lead times.
+  \end{itemize}
+\end{greenbox}
 
 \subsection{Training Setup}
 
@@ -148,6 +196,106 @@ Here $\mathcal{T}$ contains the training date--token pairs. We select $\alpha$ s
   \sqrt{\sum_{n,j}\delta\widehat{\mathbf{Y}}_c(n,j)^2}}
 \end{align}
 where $\delta\mathbf{Y}_c(n,j)$ and $\delta\widehat{\mathbf{Y}}_c(n,j)$ denote deviations from each field's spatial mean at date $t$.
+
+\subsection{Higher (lower) latent levels correspond to higher (lower) pressure levels }
+
+\begin{figure}[t!]
+  \centering
+  \includegraphics[width=\linewidth]{results/latent_pressure.png}
+  \caption{Number of target fields from each pressure level that are best predicted from a certain latent level in the backbone. Best means the latnet level with the max pearson averaged between pretrained and random model probes.}
+  \label{fig:latent_pressure}
+\end{figure}
+
+Figure \ref{fig:latent_pressure}: target fields at which pressure level can best be predicted by each latent level? By Aurora's design we expect that higher latents levels correspond to higher altituted (lower pressure). This generally holds. Latent 0 is the best for all six surface fields; for 850 and 700 hPa the first two latents always win, and for 500 and 250 hPa the last two latents win. This supports that information for the higher/lower altitudes is more easily readable from higher/lower latent levels.
+
+\textbf{\color{orange} From now on we only report results from the best latent level for each target.}
+
+\subsection{Probes support distributed linear representations}
+
+\begin{figure}[t!]
+  \centering
+  \includegraphics[width=\linewidth]{results/pretrained_v_random_scatter.png}
+  \caption{Pearson of probes trained over pretrained and random model activations.}
+  \label{fig:pretrained_v_random_scatter}
+\end{figure}
+
+Figure \ref{fig:pretrained_v_random_scatter}: compares the Pearson coeffs of probes trained over pretrained and random models across different $k$ values and lead times. 1) Probes over the pretrained model are usually more accurate. 2) Average performance tends to drop with larger lead times. 3) Larger $k$ leads to better performance, and $k=1$ probes are very similar between the pretrained and random models. These support that much information is linearly readable from the activations, but generally not from individual neurons.
+
+Figure \ref{fig:probe_heatmaps} shows the RMSE gain observed by probing the pretrained model v the random init model for different $k$ values and lead times. The $u$ field is more easily accessible in the pretrained model across all combinations, whereas for total column water vapor (TCWV) the gain is more often negative than positive except when $k=D$. This means the tcwv field is no more linearly accessible from the pretrained model activations than from the random model activations.
+
+Interestingly for the D1 layer, the gan is positive for small $k$ but negative for large $k$ across all lead times. This might mean that tcwv is particularly important for the final layer, or is passed directly from the inputs to the final layer through skip connections.
+
+Similarly for the mean sea-level pressure (MSL), the gain is negative in the intermediate layer when $k$ is small and becomes positive only with large $k$, which might indicate that the pretrained model mostly learns to route the MSL-relevant information around those layers, and that they do not play a particularly important role for the computation in those layers.
+
+We should be careful that red in these plots does not mean that the information is not present at all, but only that it is not more easily readable than from the activations of a randomly init model.
+
+\subsection{Full-width probes are ``sparse"}
+
+\begin{figure}[t!]
+\centering
+\includegraphics[width=\linewidth]{results/probe_particip_ratio.png}
+\caption{Participation ratio of pretrained and random models at different layers and lead times.}
+\label{fig:probe_particip_ratio}
+\end{figure}
+
+For each spatial position, we compute a full-width ($k=D$) probe's weight participation ratio as
+$
+\text{PR}(\mathbf{w})
+=
+\frac{1}{D} \left( \sum_i \mathbf{w}_i^2 \right)^2 / \sum_i \mathbf{w}_i^4
+$. This is a way of quantifying how many of the neurons are ``important'' to the probe. PR closer to 1 means most neurons carry equal amount of weight, while PR closer to 0 means only a small fraction of neurons dominate.
+
+Figure \ref{fig:probe_particip_ratio} shows that 1) PR values are significantly lower for the pretrained model probes than the random model probes (around 0.05-0.1 vs 0.25-0.3), and specifically for the pretrained model probes, 2) input probes (lead time = 0) consistently have smaller PRs with the PRs roughly increasing with lead time. These mean the input information is more easily readable from the Aurora backbone, and lead times further away require more neurons, perhaps becaus the probes are picking up on basic correlations between the quantities encoded across different neurons to predict future quantities (?).
+
+There is also a noticeable spike for the D1 layer but we have no explanation right now for why.
+
+\subsection{Future timesteps can be decoded more easily from later layers}
+
+\begin{figure*}[t!]
+\centering
+\includegraphics[width=0.9\linewidth]{results/probe_direct_v_derived.png}
+\caption{RMSE for fields derived from ERA5 fields when directly probed and computed from the predictions of component probes.}
+\label{fig:probe_direct_v_pretrained}
+\end{figure*}
+
+\begin{figure}[t!]
+\centering
+\includegraphics[width=\linewidth]{results/probe_layer_leadtime.png}
+\caption{Pretrained model probe pearsons and gain vs the random model across different layers and lead times.}
+\label{fig:probe_layer_leadtime}
+\end{figure}
+
+Figure \ref{fig:probe_layer_leadtime} shows the pearson coeffs of the pretrained model probes, and the difference between the pretrained and random init model, averages across all probe targets for the full-width probes. 1) the input fields (lead time 0) are most easily recovered from the first layer unsurprisingly, 2) the output fields (lead time 6 hrs) are most easily recovered from the last two layers which is also not surprising, and 3) the middle two layers E2 and D0 have maintain the highest absolute pearson for later lead times beyond 6 hrs, and D1 also results in the largest gain over the random model. This suggests that the early layers are very close to the input state, the later layers to the output state, and the middle layers are where the more general/informative processing happens.
+
+The panel to the side of Figure \ref{fig:probe_layer_leadtime} also supports this -- the middle layers perform the best for the lead times > 6 hrs, while the 0h and 6h curves follow different patterns.
+
+\subsection{For derived fields (not ERA5-provided), computing from component probes can outperform direct probing}
+
+We compute the wind speed ($s$), relative vorticity ($\zeta$), and relative humidity (RH) fields from the ERA5-provided fields as follows:
+\begin{align}
+s &= \sqrt{u^2 + v^2} \quad (\text{m/s}) \\
+\zeta &= \frac{\partial v}{\partial x} - \frac{\partial u}{\partial y} \quad (\text{s}^{-1}) \\
+\text{RH} &\approx \frac{q}{q_s(T, p)} \quad (\text{no unit})
+\end{align}
+and we compare linear probing directly for these fields with computing them from the probes for their components; e.g. using the $u$ and $v$ probes separately to compute the wind speed.
+
+Figure \ref{fig:probe_direct_v_pretrained} shows the resulting RMSEs for these fields at 500 hPa for different layers and lead times. For wind speed, using the component probes tends to outperform direct probing especially at small lead times. However, for relative vorticity and relative humidity direct probing is better.
+
+Not clear if there is a global explanation for this, but:
+\begin{itemize}
+\item It makes sense for wind speed because using the components, we can explicitly compute the nonlinear operation which a linear probe might struggle to capture.
+\item Vorticity is linear in its components so a linear probe might work, and the prediction errors in the individual components might amplify through differentation.
+\item Harder to reason about for relative humidity, but the division might likewise amplify small prediction errors?
+\end{itemize}
+
+\begin{figure*}[t!]
+\centering
+\includegraphics[width=\textwidth]{results/probe_heatmap_msl.png}\par
+\includegraphics[width=\textwidth]{results/probe_heatmap_tcwv.png}\par
+\includegraphics[width=\textwidth]{results/probe_heatmap_u.png}
+\caption{Probe RMSE differences (pretrained -- random) for msl, tcwv, and u across backbone stages, channel counts $k$, and lead times. Negative (red) values indicate lower RMSE for probes trained on pretrained model activations.}
+\label{fig:probe_heatmaps}
+\end{figure*}
 
 \section{Discussion}
 

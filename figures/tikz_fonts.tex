@@ -1,0 +1,5 @@
+% Figure-only font settings; the paper's main text remains in the ICML font.
+\usepackage[type1,lining,tabular]{FiraSans}
+\usepackage{sansmath}
+\DeclareMathAlphabet{\mathbffira}{T1}{FiraSans-TLF}{b}{n}
+\tikzset{every picture/.append style={execute at begin picture={\renewcommand{\sfdefault}{FiraSans-TLF}\fontfamily{FiraSans-TLF}\selectfont\sansmath\let\mathbf\mathbffira}}}
